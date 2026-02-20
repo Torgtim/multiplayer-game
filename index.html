@@ -3,12 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <title>Multiplayer Shooter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <canvas id="game"></canvas>
 
+<!-- Topp‑HUD -->
+<div id="topbar">
+    <button id="menuToggle">☰</button>
+    <div id="roomHUD">Room: ---</div>
+    <div id="hpHUD">HP: 100</div>
+    <div id="coinsHUD">Coins: 0</div>
+</div>
+
+<!-- Meny -->
 <div id="menu">
     <h2>Multiplayer</h2>
     <button id="createBtn">Create Room</button>
@@ -18,9 +28,9 @@
     <p id="roomDisplay"></p>
 </div>
 
+<!-- Shop -->
 <div id="shop">
     <h3>Skins</h3>
-    <p>Coins: <span id="coinsDisplay">0</span></p>
     <div id="skinPreview"></div>
     <p id="skinName"></p>
     <p id="skinPrice"></p>
