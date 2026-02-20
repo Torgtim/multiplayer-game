@@ -11,6 +11,16 @@ const roomInput = document.getElementById("roomInput");
 const roomDisplay = document.getElementById("roomDisplay");
 const menu = document.getElementById("menu");
 
+// Shop UI
+const shop = document.getElementById("shop");
+const coinsDisplay = document.getElementById("coinsDisplay");
+const skinPreview = document.getElementById("skinPreview");
+const skinName = document.getElementById("skinName");
+const skinPrice = document.getElementById("skinPrice");
+const prevSkinBtn = document.getElementById("prevSkin");
+const nextSkinBtn = document.getElementById("nextSkin");
+const buySkinBtn = document.getElementById("buySkin");
+
 // === Canvas ===
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -19,7 +29,7 @@ canvas.height = innerHeight;
 
 // === Players ===
 let player = { x: 200, y: 200, dir: 0, speed: 3 };
-let enemy = { x: 200, y: 200, dir: 0 };
+let enemy = { x: 400, y: 200, dir: 0 };
 
 // === Bullets ===
 let bullets = [];
@@ -31,13 +41,64 @@ let walls = [
     { x: 100, y: 500, w: 150, h: 150 }
 ];
 
+// === Skins (bare in-game coins, ikke ekte penger) ===
+let coins = 0;
+let skins = [
+    { name: "Default", color: "cyan", price: 0 },
+    { name: "Red", color: "red", price: 50 },
+    { name: "Green", color: "lime", price: 50 },
+    { name: "Purple", color: "magenta", price: 100 }
+];
+let ownedSkins = { "Default": true };
+let currentSkinIndex = 0;
+let currentSkin = skins[0];
+
+function updateShopUI() {
+    const skin = skins[currentSkinIndex];
+    skinPreview.style.background = skin.color;
+    skinName.textContent = skin.name;
+    skinPrice.textContent = "Price: " + skin.price + " coins";
+    coinsDisplay.textContent = coins;
+
+    if (ownedSkins[skin.name]) {
+        buySkinBtn.textContent = "Equip";
+    } else {
+        buySkinBtn.textContent = "Buy";
+    }
+}
+
+prevSkinBtn.onclick = () => {
+    currentSkinIndex = (currentSkinIndex - 1 + skins.length) % skins.length;
+    updateShopUI();
+};
+
+nextSkinBtn.onclick = () => {
+    currentSkinIndex = (currentSkinIndex + 1) % skins.length;
+    updateShopUI();
+};
+
+buySkinBtn.onclick = () => {
+    const skin = skins[currentSkinIndex];
+    if (!ownedSkins[skin.name]) {
+        if (coins >= skin.price) {
+            coins -= skin.price;
+            ownedSkins[skin.name] = true;
+        } else {
+            return;
+        }
+    }
+    currentSkin = skin;
+    updateShopUI();
+};
+
+updateShopUI();
+
 // === JOYSTICK ===
 const joyArea = document.getElementById("joystick-area");
 const joy = document.getElementById("joystick");
 
 let joyX = 0, joyY = 0;
 
-// Joystick logic
 joyArea.addEventListener("touchmove", e => {
     const rect = joyArea.getBoundingClientRect();
     const t = e.touches[0];
@@ -58,6 +119,8 @@ joyArea.addEventListener("touchmove", e => {
 
     joyX = dx / max;
     joyY = dy / max;
+
+    player.dir = Math.atan2(dy, dx);
 });
 
 joyArea.addEventListener("touchend", () => {
@@ -76,10 +139,12 @@ document.getElementById("shoot-btn").addEventListener("touchstart", () => {
         dy: Math.sin(player.dir) * 8
     });
 
-    socket.send(JSON.stringify({
-        type: "shoot",
-        bullets: bullets
-    }));
+    if (connected) {
+        socket.send(JSON.stringify({
+            type: "shoot",
+            bullets: bullets
+        }));
+    }
 });
 
 // === COLLISION ===
@@ -148,8 +213,8 @@ function loop() {
         player.y = newY;
     }
 
-    // Draw player
-    ctx.fillStyle = "cyan";
+    // Draw player with current skin
+    ctx.fillStyle = currentSkin.color;
     ctx.fillRect(player.x, player.y, 40, 40);
 
     // Draw enemy
@@ -169,6 +234,10 @@ function loop() {
         ctx.fillStyle = "red";
         ctx.fillRect(b.x, b.y, 10, 10);
     });
+
+    // Gi coins over tid (bare for testing)
+    coins += 0.02;
+    coinsDisplay.textContent = Math.floor(coins);
 
     // Send player update
     if (connected) {
