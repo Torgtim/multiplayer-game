@@ -1,27 +1,31 @@
-// === WebSocket ===
 const socket = new WebSocket("wss://multiplayer-server-production-40dc.up.railway.app");
 
 let roomCode = null;
 let connected = false;
 let myId = null;
 
-// === UI ===
+// UI
 const createBtn = document.getElementById("createBtn");
 const joinBtn = document.getElementById("joinBtn");
 const roomInput = document.getElementById("roomInput");
 const roomDisplay = document.getElementById("roomDisplay");
 const menu = document.getElementById("menu");
 const menuToggle = document.getElementById("menuToggle");
-
 const roomHUD = document.getElementById("roomHUD");
 const hpHUD = document.getElementById("hpHUD");
 const coinsHUD = document.getElementById("coinsHUD");
-
 const nameIntro = document.getElementById("nameIntro");
 const nameInput = document.getElementById("nameInput");
 const nameConfirm = document.getElementById("nameConfirm");
+const portraitOverlay = document.getElementById("portraitOverlay");
+const stayPortrait = document.getElementById("stayPortrait");
+const ammoHUD = document.getElementById("ammoHUD");
+const scoreBtn = document.getElementById("scoreBtn");
+const scoreboard = document.getElementById("scoreboard");
+const scoreTable = document.getElementById("scoreTable");
+const killfeedDiv = document.getElementById("killfeed");
 
-// Shop UI
+// Shop
 const shop = document.getElementById("shop");
 const skinPreview = document.getElementById("skinPreview");
 const skinName = document.getElementById("skinName");
@@ -30,10 +34,9 @@ const prevSkinBtn = document.getElementById("prevSkin");
 const nextSkinBtn = document.getElementById("nextSkin");
 const buySkinBtn = document.getElementById("buySkin");
 
-// === Canvas ===
+// Canvas
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-
 function resize() {
   canvas.width = innerWidth;
   canvas.height = innerHeight;
@@ -41,14 +44,13 @@ function resize() {
 resize();
 window.addEventListener("resize", resize);
 
-// === Player data ===
+// Name
 let playerName = localStorage.getItem("playerName") || "";
 if (!playerName) {
   nameIntro.style.display = "flex";
 } else {
   nameIntro.style.display = "none";
 }
-
 nameConfirm.onclick = () => {
   const val = nameInput.value.trim();
   if (!val) return;
@@ -57,13 +59,29 @@ nameConfirm.onclick = () => {
   nameIntro.style.display = "none";
 };
 
-let player = { x: 0, y: 0, dir: 0, speed: 4, hp: 100 };
+// Portrait overlay
+function checkOrientation() {
+  if (window.innerHeight > window.innerWidth) {
+    portraitOverlay.style.display = "flex";
+  } else {
+    portraitOverlay.style.display = "none";
+  }
+}
+checkOrientation();
+window.addEventListener("resize", checkOrientation);
+stayPortrait.onclick = () => {
+  portraitOverlay.style.display = "none";
+};
+
+// Player + world
+let player = { x: 0, y: 0, dir: 0, speed: 4, hp: 100, ammo: 30 };
 let coins = 0;
+let players = {};
+let pickups = {};
+let stats = {};
+let killfeed = [];
 
-// alle spillere i rommet
-let players = {}; // { id: {x,y,dir,skin,name,hp} }
-
-// === Skins ===
+// Skins
 let skins = [
   {
     name: "Default",
@@ -140,7 +158,6 @@ let skins = [
 let ownedSkins = { "Default": true };
 let savedOwned = localStorage.getItem("ownedSkins");
 let savedSkin = localStorage.getItem("currentSkin");
-
 if (savedOwned) ownedSkins = JSON.parse(savedOwned);
 let currentSkinIndex = 0;
 let currentSkin = skins[0];
@@ -148,12 +165,10 @@ if (savedSkin) {
   const found = skins.find(s => s.name === savedSkin);
   if (found) currentSkin = found;
 }
-
 function saveSkins() {
   localStorage.setItem("ownedSkins", JSON.stringify(ownedSkins));
   localStorage.setItem("currentSkin", currentSkin.name);
 }
-
 function updateShopUI() {
   const skin = skins[currentSkinIndex];
   const temp = document.createElement("canvas");
@@ -163,28 +178,20 @@ function updateShopUI() {
   skin.draw(tctx, 0, 0);
   skinPreview.style.backgroundImage = `url(${temp.toDataURL()})`;
   skinPreview.style.backgroundSize = "cover";
-
   skinName.textContent = skin.name;
   skinPrice.textContent = "Price: " + skin.price + " coins";
   coinsHUD.textContent = "Coins: " + Math.floor(coins);
-
-  if (ownedSkins[skin.name]) {
-    buySkinBtn.textContent = "Equip";
-  } else {
-    buySkinBtn.textContent = "Buy";
-  }
+  if (ownedSkins[skin.name]) buySkinBtn.textContent = "Equip";
+  else buySkinBtn.textContent = "Buy";
 }
-
 prevSkinBtn.onclick = () => {
   currentSkinIndex = (currentSkinIndex - 1 + skins.length) % skins.length;
   updateShopUI();
 };
-
 nextSkinBtn.onclick = () => {
   currentSkinIndex = (currentSkinIndex + 1) % skins.length;
   updateShopUI();
 };
-
 buySkinBtn.onclick = () => {
   const skin = skins[currentSkinIndex];
   if (!ownedSkins[skin.name]) {
@@ -192,47 +199,35 @@ buySkinBtn.onclick = () => {
       coins -= skin.price;
       ownedSkins[skin.name] = true;
       saveSkins();
-    } else {
-      return;
-    }
+    } else return;
   }
   currentSkin = skin;
   saveSkins();
   updateShopUI();
 };
-
 updateShopUI();
 
-// === Joystick ===
+// Joystick
 const joyArea = document.getElementById("joystick-area");
 const joy = document.getElementById("joystick");
-
 let joyX = 0, joyY = 0;
-
 joyArea.addEventListener("touchmove", e => {
   const rect = joyArea.getBoundingClientRect();
   const t = e.touches[0];
-
   let dx = t.clientX - (rect.left + rect.width / 2);
   let dy = t.clientY - (rect.top + rect.height / 2);
-
   const dist = Math.hypot(dx, dy);
   const max = 50;
-
   if (dist > max) {
     dx = dx / dist * max;
     dy = dy / dist * max;
   }
-
   joy.style.left = (40 + dx) + "px";
   joy.style.top = (40 + dy) + "px";
-
   joyX = dx / max;
   joyY = dy / max;
-
   player.dir = Math.atan2(dy, dx);
 });
-
 joyArea.addEventListener("touchend", () => {
   joy.style.left = "40px";
   joy.style.top = "40px";
@@ -240,11 +235,12 @@ joyArea.addEventListener("touchend", () => {
   joyY = 0;
 });
 
-// === Shoot ===
+// Shoot
 let bullets = [];
-
 document.getElementById("shoot-btn").addEventListener("touchstart", () => {
   if (!connected) return;
+  if (player.ammo <= 0) return;
+  player.ammo--;
   bullets.push({
     x: player.x,
     y: player.y,
@@ -254,11 +250,11 @@ document.getElementById("shoot-btn").addEventListener("touchstart", () => {
   });
 });
 
-// === World ===
+// World
 let walls = [
-  { x: -200, y: -100, w: 200, h: 80 },
-  { x: 200, y: 100, w: 250, h: 120 },
-  { x: -100, y: 250, w: 150, h: 150 }
+  { x: -300, y: -200, w: 300, h: 80 },
+  { x: 200, y: 150, w: 250, h: 120 },
+  { x: -150, y: 300, w: 200, h: 150 }
 ];
 
 function rectCollides(ax, ay, aw, ah, bx, by, bw, bh) {
@@ -268,19 +264,18 @@ function rectCollides(ax, ay, aw, ah, bx, by, bw, bh) {
          ay + ah > by;
 }
 
-// === Menu toggle ===
+// Menu toggle
 menuToggle.onclick = () => {
   const show = menu.style.display === "none";
   menu.style.display = show ? "block" : "none";
   shop.style.display = show ? "block" : "none";
 };
 
-// === Room buttons ===
+// Room buttons
 createBtn.onclick = () => {
   if (!playerName) return;
   socket.send(JSON.stringify({ type: "create_room", name: playerName }));
 };
-
 joinBtn.onclick = () => {
   if (!playerName) return;
   const code = roomInput.value.toUpperCase();
@@ -288,7 +283,19 @@ joinBtn.onclick = () => {
   socket.send(JSON.stringify({ type: "join_room", code, name: playerName }));
 };
 
-// === Socket events ===
+// Scoreboard
+scoreBtn.onclick = () => {
+  if (!connected) return;
+  const visible = scoreboard.style.display === "block";
+  if (visible) {
+    scoreboard.style.display = "none";
+  } else {
+    socket.send(JSON.stringify({ type: "scoreboard" }));
+    scoreboard.style.display = "block";
+  }
+};
+
+// Socket
 socket.onmessage = msg => {
   const data = JSON.parse(msg.data);
 
@@ -314,13 +321,59 @@ socket.onmessage = msg => {
 
   if (data.type === "players") {
     players = data.players || {};
+    pickups = data.pickups || {};
+    stats = data.stats || {};
     if (players[myId]) {
       player.hp = players[myId].hp;
+      player.ammo = players[myId].ammo;
+      player.x = players[myId].x;
+      player.y = players[myId].y;
     }
+  }
+
+  if (data.type === "killfeed") {
+    killfeed.push(`${data.killer} eliminated ${data.victim}`);
+    setTimeout(() => {
+      killfeed.shift();
+    }, 5000);
+  }
+
+  if (data.type === "scoreboard") {
+    const s = data.stats || {};
+    const pl = data.players || {};
+    scoreTable.innerHTML = `
+      <tr><th>Name</th><th>K</th><th>D</th><th>DMG</th></tr>
+    `;
+    Object.keys(pl).forEach(id => {
+      const st = s[id] || { kills: 0, deaths: 0, damage: 0 };
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${pl[id].name}</td>
+        <td>${st.kills || 0}</td>
+        <td>${st.deaths || 0}</td>
+        <td>${st.damage || 0}</td>
+      `;
+      scoreTable.appendChild(row);
+    });
   }
 };
 
-// === Game loop ===
+// Killfeed render
+function renderKillfeed() {
+  killfeedDiv.innerHTML = "";
+  killfeed.forEach(line => {
+    const p = document.createElement("div");
+    p.textContent = line;
+    killfeedDiv.appendChild(p);
+  });
+}
+
+// Lerp movement
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+// Game loop
 function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -330,44 +383,56 @@ function loop() {
 
   // Bakgrunn
   ctx.fillStyle = "#222";
-  ctx.fillRect(player.x - 1000, player.y - 1000, 2000, 2000);
+  ctx.fillRect(-800, -800, 1600, 1600);
 
   // Vegger
   ctx.fillStyle = "#555";
   walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
 
-  // Bevegelse
-  let newX = player.x + joyX * player.speed;
-  let newY = player.y + joyY * player.speed;
-
+  // Movement (smooth)
+  let targetX = player.x + joyX * player.speed;
+  let targetY = player.y + joyY * player.speed;
   let blocked = walls.some(w =>
-    rectCollides(newX - 20, newY - 20, 40, 40, w.x, w.y, w.w, w.h)
+    rectCollides(targetX - 20, targetY - 20, 40, 40, w.x, w.y, w.w, w.h)
   );
-
   if (!blocked) {
-    player.x = newX;
-    player.y = newY;
+    player.x = lerp(player.x, targetX, 0.25);
+    player.y = lerp(player.y, targetY, 0.25);
   }
 
-  // Oppdater HP HUD
+  // HP + ammo HUD
   hpHUD.textContent = "HP: " + Math.max(0, Math.floor(player.hp));
+  ammoHUD.textContent = "AMMO: " + player.ammo;
   coinsHUD.textContent = "Coins: " + Math.floor(coins);
 
-  // Tegn alle spillere
+  // Pickups
+  Object.values(pickups).forEach(pk => {
+    if (pk.type === "ammo") ctx.fillStyle = "yellow";
+    else if (pk.type === "speed") ctx.fillStyle = "blue";
+    else if (pk.type === "shield") ctx.fillStyle = "cyan";
+    else if (pk.type === "damage") ctx.fillStyle = "red";
+    ctx.fillRect(pk.x - 10, pk.y - 10, 20, 20);
+
+    // pickup collision
+    if (rectCollides(player.x - 20, player.y - 20, 40, 40, pk.x - 10, pk.y - 10, 20, 20)) {
+      if (connected) {
+        socket.send(JSON.stringify({ type: "pickup", id: pk.id }));
+      }
+    }
+  });
+
+  // Players
   for (let id in players) {
     const pl = players[id];
     const skin = skins.find(s => s.name === pl.skin) || skins[0];
-
     skin.draw(ctx, pl.x - 20, pl.y - 20);
-
-    // Nametag
     ctx.fillStyle = "white";
     ctx.font = "14px Arial";
     ctx.textAlign = "center";
     ctx.fillText(pl.name || "Player", pl.x, pl.y - 30);
   }
 
-  // Tegn deg selv hvis du ikke har sync ennå
+  // Hvis vi ikke har sync på oss selv ennå
   if (!players[myId]) {
     currentSkin.draw(ctx, player.x - 20, player.y - 20);
     ctx.fillStyle = "white";
@@ -404,7 +469,7 @@ function loop() {
 
   ctx.restore();
 
-  // Send posisjon til server
+  // Send update
   if (connected && myId && playerName) {
     socket.send(JSON.stringify({
       type: "update",
@@ -412,10 +477,13 @@ function loop() {
       y: player.y,
       dir: player.dir,
       skin: currentSkin.name,
-      name: playerName
+      name: playerName,
+      hp: player.hp,
+      ammo: player.ammo
     }));
   }
 
+  renderKillfeed();
   requestAnimationFrame(loop);
 }
 
