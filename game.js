@@ -100,7 +100,9 @@ let skins = [
   {
     name: "Default",
     price: 0,
-    abilityType: "dash", // kort dash fremover
+    abilityType: "dash",
+    abilityPower: 120,       // dash distance
+    cooldown: 5000,
     draw: (ctx, x, y) => {
       ctx.fillStyle = "cyan";
       ctx.fillRect(x, y, 40, 40);
@@ -108,8 +110,10 @@ let skins = [
   },
   {
     name: "Neon",
-    price: 50,
-    abilityType: "speed", // ekstra speed boost
+    price: 150,
+    abilityType: "speed",
+    abilityPower: 1.8,      // speed multiplier
+    cooldown: 6000,
     draw: (ctx, x, y) => {
       ctx.save();
       ctx.shadowColor = "#0ff";
@@ -121,8 +125,10 @@ let skins = [
   },
   {
     name: "Lava",
-    price: 100,
-    abilityType: "burst", // skyter 3 skudd
+    price: 300,
+    abilityType: "burst",
+    abilityPower: 5,        // number of bullets
+    cooldown: 7000,
     draw: (ctx, x, y) => {
       let g = ctx.createLinearGradient(x, y, x+40, y+40);
       g.addColorStop(0, "#f00");
@@ -133,8 +139,10 @@ let skins = [
   },
   {
     name: "Toxic",
-    price: 120,
-    abilityType: "poison", // kunne vært DoT senere
+    price: 400,
+    abilityType: "poison",
+    abilityPower: 5,        // poison damage per tick
+    cooldown: 8000,
     draw: (ctx, x, y) => {
       ctx.fillStyle = "#0f0";
       ctx.fillRect(x, y, 40, 40);
@@ -150,8 +158,10 @@ let skins = [
   },
   {
     name: "Ice",
-    price: 80,
-    abilityType: "freeze", // kunne bremse andre senere
+    price: 500,
+    abilityType: "freeze",
+    abilityPower: 2000,     // freeze duration in ms
+    cooldown: 9000,
     draw: (ctx, x, y) => {
       let g = ctx.createLinearGradient(x, y, x+40, y+40);
       g.addColorStop(0, "#aaf");
@@ -162,8 +172,10 @@ let skins = [
   },
   {
     name: "Shadow",
-    price: 150,
-    abilityType: "blink", // teleport kort distanse
+    price: 700,
+    abilityType: "blink",
+    abilityPower: 200,      // teleport distance
+    cooldown: 6000,
     draw: (ctx, x, y) => {
       ctx.save();
       ctx.shadowColor = "#000";
@@ -174,6 +186,7 @@ let skins = [
     }
   }
 ];
+
 
 let ownedSkins = { "Default": true };
 let savedOwned = localStorage.getItem("ownedSkins");
