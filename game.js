@@ -321,19 +321,74 @@ function useAbility() {
   if (player.abilityCooldown > now) return;
 
   const type = currentSkin.abilityType;
+  const power = currentSkin.abilityPower;
+
   if (type === "dash") {
-    player.x += Math.cos(player.dir) * 80;
-    player.y += Math.sin(player.dir) * 80;
-  } else if (type === "speed") {
-    player.speedBoostUntil = now + 4000;
-  } else if (type === "burst") {
-    fireBullet(3);
-  } else if (type === "blink") {
-    player.x += Math.cos(player.dir) * 150;
-    player.y += Math.sin(player.dir) * 150;
+    player.x += Math.cos(player.dir) * power;
+    player.y += Math.sin(player.dir) * power;
   }
-  player.abilityCooldown = now + 6000; // 6 sek cooldown
+
+  if (type === "speed") {
+    player.speedBoostUntil = now + 3000;
+    player.speedBoostMultiplier = power;
+  }
+
+  if (type === "burst") {
+    fireBullet(power);
+  }
+
+  if (type === "blink") {
+    player.x += Math.cos(player.dir) * power;
+    player.y += Math.sin(player.dir) * power;
+  }
+
+  if (type === "freeze") {
+    // freeze nærmeste fiende
+    let closest = null;
+    let dist = 99999;
+    for (let id in players) {
+      if (id === myId) continue;
+      const pl = players[id];
+      const d = Math.hypot(pl.x - player.x, pl.y - player.y);
+      if (d < dist) {
+        dist = d;
+        closest = id;
+      }
+    }
+    if (closest) {
+      socket.send(JSON.stringify({
+        type: "freeze",
+        targetId: closest,
+        duration: power
+      }));
+    }
+  }
+
+  if (type === "poison") {
+    // poison nærmeste fiende
+    let closest = null;
+    let dist = 99999;
+    for (let id in players) {
+      if (id === myId) continue;
+      const pl = players[id];
+      const d = Math.hypot(pl.x - player.x, pl.y - player.y);
+      if (d < dist) {
+        dist = d;
+        closest = id;
+      }
+    }
+    if (closest) {
+      socket.send(JSON.stringify({
+        type: "poison",
+        targetId: closest,
+        damage: power
+      }));
+    }
+  }
+
+  player.abilityCooldown = now + currentSkin.cooldown;
 }
+
 
 // World walls + border
 let walls = [
