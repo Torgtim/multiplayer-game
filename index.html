@@ -1,50 +1,54 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>Multiplayer Shooter</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>Torgrim Multiplayer V4</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <canvas id="game"></canvas>
 
-<!-- Topp‑HUD -->
 <div id="topbar">
-    <button id="menuToggle">☰</button>
-    <div id="roomHUD">Room: ---</div>
-    <div id="hpHUD">HP: 100</div>
-    <div id="coinsHUD">Coins: 0</div>
+  <button id="menuToggle">☰</button>
+  <div id="roomHUD">Room: ---</div>
+  <div id="hpHUD">HP: 100</div>
+  <div id="coinsHUD">Coins: 0</div>
 </div>
 
-<!-- Meny -->
 <div id="menu">
-    <h2>Multiplayer</h2>
-    <button id="createBtn">Create Room</button>
-    <br><br>
-    <input id="roomInput" placeholder="Room code">
-    <button id="joinBtn">Join Room</button>
-    <p id="roomDisplay"></p>
+  <h2>Multiplayer</h2>
+  <button id="createBtn">Create Room</button>
+  <br><br>
+  <input id="roomInput" placeholder="Room code">
+  <button id="joinBtn">Join Room</button>
+  <p id="roomDisplay"></p>
 </div>
 
-<!-- Shop -->
 <div id="shop">
-    <h3>Skins</h3>
-    <div id="skinPreview"></div>
-    <p id="skinName"></p>
-    <p id="skinPrice"></p>
-    <button id="prevSkin">◀</button>
-    <button id="nextSkin">▶</button>
-    <button id="buySkin">Buy / Equip</button>
+  <h3>Skins</h3>
+  <div id="skinPreview"></div>
+  <p id="skinName"></p>
+  <p id="skinPrice"></p>
+  <button id="prevSkin">◀</button>
+  <button id="nextSkin">▶</button>
+  <button id="buySkin">Buy / Equip</button>
 </div>
 
-<!-- Joystick -->
+<div id="nameIntro">
+  <div id="nameBox">
+    <h1>Choose your name</h1>
+    <input id="nameInput" maxlength="16" placeholder="Your name">
+    <button id="nameConfirm">Confirm</button>
+    <p class="byline">By TG tech</p>
+  </div>
+</div>
+
 <div id="joystick-area">
-    <div id="joystick"></div>
+  <div id="joystick"></div>
 </div>
 
-<!-- Shoot button -->
 <div id="shoot-btn">SHOOT</div>
 
 <script src="game.js"></script>
