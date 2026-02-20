@@ -1,20 +1,121 @@
-// === WebSocket connection ===
+// === WebSocket ===
 const socket = new WebSocket("wss://multiplayer-server-production-40dc.up.railway.app");
 
-let playerId = Math.random().toString(36).substring(2, 8);
 let roomCode = null;
+let connected = false;
 
-socket.onopen = () => {
-    console.log("Connected to server");
+// === UI ===
+const createBtn = document.getElementById("createBtn");
+const joinBtn = document.getElementById("joinBtn");
+const roomInput = document.getElementById("roomInput");
+const roomDisplay = document.getElementById("roomDisplay");
+const menu = document.getElementById("menu");
+
+// === Canvas ===
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+// === Players ===
+let player = { x: 200, y: 200, dir: 0, speed: 3 };
+let enemy = { x: 200, y: 200, dir: 0 };
+
+// === Bullets ===
+let bullets = [];
+let enemyBullets = [];
+
+// === Walls ===
+let walls = [
+    { x: 300, y: 200, w: 200, h: 80 },
+    { x: 100, y: 500, w: 150, h: 150 }
+];
+
+// === JOYSTICK ===
+const joyArea = document.getElementById("joystick-area");
+const joy = document.getElementById("joystick");
+
+let joyX = 0, joyY = 0;
+
+// Joystick logic
+joyArea.addEventListener("touchmove", e => {
+    const rect = joyArea.getBoundingClientRect();
+    const t = e.touches[0];
+
+    let dx = t.clientX - (rect.left + rect.width / 2);
+    let dy = t.clientY - (rect.top + rect.height / 2);
+
+    const dist = Math.hypot(dx, dy);
+    const max = 50;
+
+    if (dist > max) {
+        dx = dx / dist * max;
+        dy = dy / dist * max;
+    }
+
+    joy.style.left = (40 + dx) + "px";
+    joy.style.top = (40 + dy) + "px";
+
+    joyX = dx / max;
+    joyY = dy / max;
+});
+
+joyArea.addEventListener("touchend", () => {
+    joy.style.left = "40px";
+    joy.style.top = "40px";
+    joyX = 0;
+    joyY = 0;
+});
+
+// === SHOOT BUTTON ===
+document.getElementById("shoot-btn").addEventListener("touchstart", () => {
+    bullets.push({
+        x: player.x + 20,
+        y: player.y + 20,
+        dx: Math.cos(player.dir) * 8,
+        dy: Math.sin(player.dir) * 8
+    });
+
+    socket.send(JSON.stringify({
+        type: "shoot",
+        bullets: bullets
+    }));
+});
+
+// === COLLISION ===
+function collides(px, py, w) {
+    return px < w.x + w.w &&
+           px + 40 > w.x &&
+           py < w.y + w.h &&
+           py + 40 > w.y;
+}
+
+// === MENU BUTTONS ===
+createBtn.onclick = () => {
     socket.send(JSON.stringify({ type: "create_room" }));
 };
 
+joinBtn.onclick = () => {
+    const code = roomInput.value.toUpperCase();
+    socket.send(JSON.stringify({ type: "join_room", code }));
+};
+
+// === SOCKET EVENTS ===
 socket.onmessage = msg => {
     const data = JSON.parse(msg.data);
 
     if (data.type === "room_created") {
         roomCode = data.code;
-        console.log("Room created:", roomCode);
+        roomDisplay.textContent = "Room: " + roomCode;
+        menu.style.display = "none";
+        connected = true;
+    }
+
+    if (data.type === "room_joined") {
+        roomCode = data.code;
+        roomDisplay.textContent = "Joined room: " + roomCode;
+        menu.style.display = "none";
+        connected = true;
     }
 
     if (data.type === "update") {
@@ -22,68 +123,30 @@ socket.onmessage = msg => {
         enemy.y = data.y;
         enemy.dir = data.dir;
     }
+
+    if (data.type === "enemy_shoot") {
+        enemyBullets = data.bullets;
+    }
 };
 
-// === Canvas setup ===
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-
-// === Player objects ===
-let player = { x: 200, y: 200, dir: 0, speed: 3 };
-let enemy = { x: 200, y: 200, dir: 0 };
-
-// === Joystick logic ===
-const joyArea = document.getElementById("joystick-area");
-const joy = document.getElementById("joystick");
-
-let joyActive = false;
-let joyX = 0;
-let joyY = 0;
-
-joyArea.addEventListener("touchstart", e => {
-    joyActive = true;
-});
-
-joyArea.addEventListener("touchmove", e => {
-    const rect = joyArea.getBoundingClientRect();
-    const touch = e.touches[0];
-
-    let dx = touch.clientX - (rect.left + rect.width / 2);
-    let dy = touch.clientY - (rect.top + rect.height / 2);
-
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    const maxDist = 50;
-
-    if (dist > maxDist) {
-        dx = dx / dist * maxDist;
-        dy = dy / dist * maxDist;
-    }
-
-    joy.style.left = (40 + dx) + "px";
-    joy.style.top = (40 + dy) + "px";
-
-    joyX = dx / maxDist;
-    joyY = dy / maxDist;
-});
-
-joyArea.addEventListener("touchend", () => {
-    joyActive = false;
-    joy.style.left = "40px";
-    joy.style.top = "40px";
-    joyX = 0;
-    joyY = 0;
-});
-
-// === Game loop ===
+// === GAME LOOP ===
 function loop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Move player
-    player.x += joyX * player.speed;
-    player.y += joyY * player.speed;
+    // Draw walls
+    ctx.fillStyle = "#555";
+    walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
+
+    // Move player with collision
+    let newX = player.x + joyX * player.speed;
+    let newY = player.y + joyY * player.speed;
+
+    let blocked = walls.some(w => collides(newX, newY, w));
+
+    if (!blocked) {
+        player.x = newX;
+        player.y = newY;
+    }
 
     // Draw player
     ctx.fillStyle = "cyan";
@@ -93,13 +156,29 @@ function loop() {
     ctx.fillStyle = "orange";
     ctx.fillRect(enemy.x, enemy.y, 40, 40);
 
-    // Send update to server
-    socket.send(JSON.stringify({
-        type: "update",
-        x: player.x,
-        y: player.y,
-        dir: player.dir
-    }));
+    // Update bullets
+    bullets.forEach(b => {
+        b.x += b.dx;
+        b.y += b.dy;
+        ctx.fillStyle = "yellow";
+        ctx.fillRect(b.x, b.y, 10, 10);
+    });
+
+    // Enemy bullets
+    enemyBullets.forEach(b => {
+        ctx.fillStyle = "red";
+        ctx.fillRect(b.x, b.y, 10, 10);
+    });
+
+    // Send player update
+    if (connected) {
+        socket.send(JSON.stringify({
+            type: "update",
+            x: player.x,
+            y: player.y,
+            dir: player.dir
+        }));
+    }
 
     requestAnimationFrame(loop);
 }
