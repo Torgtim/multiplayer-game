@@ -84,10 +84,15 @@ let player = {
   ammo: 30,
   abilityCooldown: 0,
   speedBoostUntil: 0,
+  speedBoostMultiplier: 1.6,
   damageBoostUntil: 0,
-  shield: 0
+  shield: 0,
+  frozenUntil: 0,
+  poisonUntil: 0,
+  poisonDamage: 0
 };
-let coins = 0;
+
+let coins = Number(localStorage.getItem("coins")) || 0;
 let players = {};
 let pickups = {};
 let stats = {};
@@ -95,13 +100,12 @@ let killfeed = [];
 let lastDeathTime = 0;
 
 // Skins + abilities
-// (abilityType brukes senere – nå bare struktur)
 let skins = [
   {
     name: "Default",
     price: 0,
     abilityType: "dash",
-    abilityPower: 120,       // dash distance
+    abilityPower: 80,
     cooldown: 5000,
     draw: (ctx, x, y) => {
       ctx.fillStyle = "cyan";
@@ -112,7 +116,7 @@ let skins = [
     name: "Neon",
     price: 150,
     abilityType: "speed",
-    abilityPower: 1.8,      // speed multiplier
+    abilityPower: 1.8,
     cooldown: 6000,
     draw: (ctx, x, y) => {
       ctx.save();
@@ -127,7 +131,7 @@ let skins = [
     name: "Lava",
     price: 300,
     abilityType: "burst",
-    abilityPower: 5,        // number of bullets
+    abilityPower: 5,
     cooldown: 7000,
     draw: (ctx, x, y) => {
       let g = ctx.createLinearGradient(x, y, x+40, y+40);
@@ -141,7 +145,7 @@ let skins = [
     name: "Toxic",
     price: 400,
     abilityType: "poison",
-    abilityPower: 5,        // poison damage per tick
+    abilityPower: 5,
     cooldown: 8000,
     draw: (ctx, x, y) => {
       ctx.fillStyle = "#0f0";
@@ -160,7 +164,7 @@ let skins = [
     name: "Ice",
     price: 500,
     abilityType: "freeze",
-    abilityPower: 2000,     // freeze duration in ms
+    abilityPower: 2000,
     cooldown: 9000,
     draw: (ctx, x, y) => {
       let g = ctx.createLinearGradient(x, y, x+40, y+40);
@@ -174,7 +178,7 @@ let skins = [
     name: "Shadow",
     price: 700,
     abilityType: "blink",
-    abilityPower: 200,      // teleport distance
+    abilityPower: 200,
     cooldown: 6000,
     draw: (ctx, x, y) => {
       ctx.save();
@@ -186,7 +190,6 @@ let skins = [
     }
   }
 ];
-
 
 let ownedSkins = { "Default": true };
 let savedOwned = localStorage.getItem("ownedSkins");
@@ -201,6 +204,9 @@ if (savedSkin) {
 function saveSkins() {
   localStorage.setItem("ownedSkins", JSON.stringify(ownedSkins));
   localStorage.setItem("currentSkin", currentSkin.name);
+}
+function saveCoins() {
+  localStorage.setItem("coins", coins);
 }
 function updateShopUI() {
   const skin = skins[currentSkinIndex];
@@ -232,6 +238,7 @@ buySkinBtn.onclick = () => {
       coins -= skin.price;
       ownedSkins[skin.name] = true;
       saveSkins();
+      saveCoins();
     } else return;
   }
   currentSkin = skin;
@@ -281,12 +288,14 @@ function fireBullet(multiplier = 1) {
   if (!connected) return;
   if (player.ammo <= 0) return;
 
-  const shots = Math.max(1, multiplier);
+  const shots = Math.min(multiplier, player.ammo);
+
   for (let i = 0; i < shots; i++) {
-    if (player.ammo <= 0) break;
     player.ammo--;
+
     const spread = (shots > 1) ? (i - (shots - 1) / 2) * 0.15 : 0;
     const dir = player.dir + spread;
+
     bullets.push({
       x: player.x,
       y: player.y,
@@ -297,7 +306,7 @@ function fireBullet(multiplier = 1) {
   }
 }
 
-// Ability button (egen knapp)
+// Ability button
 const abilityBtn = document.createElement("button");
 abilityBtn.textContent = "ABILITY";
 abilityBtn.style.position = "fixed";
@@ -305,11 +314,12 @@ abilityBtn.style.bottom = "150px";
 abilityBtn.style.right = "40px";
 abilityBtn.style.zIndex = "12";
 abilityBtn.style.padding = "6px 10px";
-abilityBtn.style.borderRadius = "8px";
-abilityBtn.style.border = "none";
-abilityBtn.style.background = "#0af";
+abilityBtn.style.borderRadius = "999px";
+abilityBtn.style.border = "2px solid #0af";
+abilityBtn.style.background = "rgba(0,0,0,0.7)";
 abilityBtn.style.color = "white";
 abilityBtn.style.fontSize = "12px";
+abilityBtn.style.boxShadow = "0 0 10px #0af";
 document.body.appendChild(abilityBtn);
 
 abilityBtn.addEventListener("touchstart", () => {
@@ -322,13 +332,28 @@ function useAbility() {
 
   const type = currentSkin.abilityType;
   const power = currentSkin.abilityPower;
+  const half = worldSize / 2;
 
   if (type === "dash") {
-    player.x += Math.cos(player.dir) * power;
-    player.y += Math.sin(player.dir) * power;
+    const dashDist = power;
+    let newX = player.x + Math.cos(player.dir) * dashDist;
+    let newY = player.y + Math.sin(player.dir) * dashDist;
+
+    newX = Math.max(-half + 20, Math.min(half - 20, newX));
+    newY = Math.max(-half + 20, Math.min(half - 20, newY));
+
+    let hitWall = walls.some(w =>
+      rectCollides(newX - 20, newY - 20, 40, 40, w.x, w.y, w.w, w.h)
+    );
+
+    if (!hitWall) {
+      player.x = newX;
+      player.y = newY;
+    }
   }
 
   if (type === "speed") {
+    const now = Date.now();
     player.speedBoostUntil = now + 3000;
     player.speedBoostMultiplier = power;
   }
@@ -338,12 +363,24 @@ function useAbility() {
   }
 
   if (type === "blink") {
-    player.x += Math.cos(player.dir) * power;
-    player.y += Math.sin(player.dir) * power;
+    const blinkDist = power;
+    let newX = player.x + Math.cos(player.dir) * blinkDist;
+    let newY = player.y + Math.sin(player.dir) * blinkDist;
+
+    newX = Math.max(-half + 20, Math.min(half - 20, newX));
+    newY = Math.max(-half + 20, Math.min(half - 20, newY));
+
+    let hitWall = walls.some(w =>
+      rectCollides(newX - 20, newY - 20, 40, 40, w.x, w.y, w.w, w.h)
+    );
+
+    if (!hitWall) {
+      player.x = newX;
+      player.y = newY;
+    }
   }
 
   if (type === "freeze") {
-    // freeze nærmeste fiende
     let closest = null;
     let dist = 99999;
     for (let id in players) {
@@ -365,7 +402,6 @@ function useAbility() {
   }
 
   if (type === "poison") {
-    // poison nærmeste fiende
     let closest = null;
     let dist = 99999;
     for (let id in players) {
@@ -389,7 +425,6 @@ function useAbility() {
   player.abilityCooldown = now + currentSkin.cooldown;
 }
 
-
 // World walls + border
 let walls = [
   { x: -300, y: -200, w: 300, h: 80 },
@@ -411,7 +446,7 @@ menuToggle.onclick = () => {
   shop.style.display = show ? "block" : "none";
 };
 
-// Draggable UI (menu, shop, scoreboard)
+// Draggable UI
 [menu, shop, scoreboard].forEach(makeDraggable);
 
 function makeDraggable(el) {
@@ -507,7 +542,6 @@ socket.onmessage = msg => {
     pickups = data.pickups || {};
     stats = data.stats || {};
     if (players[myId]) {
-      // Ikke overskriv posisjon her – client har "authority"
       player.hp = players[myId].hp;
       player.ammo = players[myId].ammo;
     }
@@ -542,6 +576,19 @@ socket.onmessage = msg => {
       scoreTable.appendChild(row);
     });
   }
+
+  if (data.type === "freeze_effect") {
+    if (data.targetId === myId) {
+      player.frozenUntil = Date.now() + data.duration;
+    }
+  }
+
+  if (data.type === "poison_effect") {
+    if (data.targetId === myId) {
+      player.poisonUntil = Date.now() + 3000;
+      player.poisonDamage = data.damage;
+    }
+  }
 };
 
 // Killfeed render
@@ -554,7 +601,7 @@ function renderKillfeed() {
   });
 }
 
-// Lerp movement
+// Lerp
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
@@ -563,46 +610,67 @@ function lerp(a, b, t) {
 function loop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  const now = Date.now();
+  const half = worldSize / 2;
+
   // Kamera
   ctx.save();
   ctx.translate(canvas.width/2 - player.x, canvas.height/2 - player.y);
 
   // Bakgrunn
-  const half = worldSize / 2;
   ctx.fillStyle = "#222";
   ctx.fillRect(-half, -half, worldSize, worldSize);
 
-  // World border
-  ctx.strokeStyle = "#00aaff";
-  ctx.lineWidth = 4;
+  // Pulsende neon‑border
+  const pulse = (Math.sin(Date.now() / 400) + 1) / 2; // 0–1
+  ctx.strokeStyle = `rgba(0,200,255,${0.6 + pulse * 0.4})`;
+  ctx.lineWidth = 6;
+  ctx.shadowColor = "#00c8ff";
+  ctx.shadowBlur = 25 + pulse * 15;
   ctx.strokeRect(-half, -half, worldSize, worldSize);
+  ctx.shadowBlur = 0;
 
   // Vegger
   ctx.fillStyle = "#555";
   walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
 
-  // Movement (smooth + speedboost + world clamp)
+  // Ultra smooth movement
   let speed = player.speed;
-  const now = Date.now();
-  if (player.speedBoostUntil > now) speed *= 1.6;
-
-  let targetX = player.x + joyX * speed;
-  let targetY = player.y + joyY * speed;
-
-  // clamp til world border
-  targetX = Math.max(-half + 20, Math.min(half - 20, targetX));
-  targetY = Math.max(-half + 20, Math.min(half - 20, targetY));
-
-  let blocked = walls.some(w =>
-    rectCollides(targetX - 20, targetY - 20, 40, 40, w.x, w.y, w.w, w.h)
-  );
-  if (!blocked) {
-    player.x = lerp(player.x, targetX, 0.25);
-    player.y = lerp(player.y, targetY, 0.25);
+  if (player.speedBoostUntil > now) {
+    speed *= player.speedBoostMultiplier || 1.6;
   }
 
-  // HP + ammo HUD
-  hpHUD.textContent = ""; // vi bruker bar i stedet
+  let desiredX = player.x + joyX * speed;
+  let desiredY = player.y + joyY * speed;
+
+  desiredX = Math.max(-half + 20, Math.min(half - 20, desiredX));
+  desiredY = Math.max(-half + 20, Math.min(half - 20, desiredY));
+
+  let blocked = walls.some(w =>
+    rectCollides(desiredX - 20, desiredY - 20, 40, 40, w.x, w.y, w.w, w.h)
+  );
+
+  if (player.frozenUntil > now) {
+    desiredX = player.x;
+    desiredY = player.y;
+    joyX = 0;
+    joyY = 0;
+  }
+
+  if (!blocked) {
+    player.x = lerp(player.x, desiredX, 0.15);
+    player.y = lerp(player.y, desiredY, 0.15);
+  }
+
+  // Poison
+  if (player.poisonUntil > now) {
+    if (Math.random() < 0.05) {
+      player.hp -= player.poisonDamage;
+    }
+  }
+
+  // HUD
+  hpHUD.textContent = "";
   ammoHUD.textContent = "AMMO: " + player.ammo;
   coinsHUD.textContent = "Coins: " + Math.floor(coins);
 
@@ -614,7 +682,6 @@ function loop() {
     else if (pk.type === "damage") ctx.fillStyle = "red";
     ctx.fillRect(pk.x - 10, pk.y - 10, 20, 20);
 
-    // pickup collision
     if (rectCollides(player.x - 20, player.y - 20, 40, 40, pk.x - 10, pk.y - 10, 20, 20)) {
       if (connected) {
         socket.send(JSON.stringify({ type: "pickup", id: pk.id }));
@@ -628,7 +695,6 @@ function loop() {
     const skin = skins.find(s => s.name === pl.skin) || skins[0];
     skin.draw(ctx, pl.x - 20, pl.y - 20);
 
-    // HP bar over andre spillere
     const hpRatio = Math.max(0, Math.min(1, pl.hp / 100));
     ctx.fillStyle = "black";
     ctx.fillRect(pl.x - 22, pl.y - 32, 44, 6);
@@ -641,7 +707,6 @@ function loop() {
     ctx.fillText(pl.name || "Player", pl.x, pl.y - 40);
   }
 
-  // Hvis vi ikke har sync på oss selv ennå
   if (!players[myId]) {
     currentSkin.draw(ctx, player.x - 20, player.y - 20);
     const hpRatio = Math.max(0, Math.min(1, player.hp / 100));
@@ -662,7 +727,6 @@ function loop() {
     b.y += b.dy;
     ctx.fillRect(b.x - 5, b.y - 5, 10, 10);
 
-    // stopp i vegger
     let hitWall = walls.some(w =>
       rectCollides(b.x - 5, b.y - 5, 10, 10, w.x, w.y, w.w, w.h)
     );
@@ -671,7 +735,6 @@ function loop() {
       return;
     }
 
-    // Treff andre spillere
     for (let id in players) {
       if (id === myId) continue;
       const pl = players[id];
@@ -681,6 +744,7 @@ function loop() {
           let dmg = 20;
           if (player.damageBoostUntil > now) dmg = 40;
           coins += 10;
+          saveCoins();
           socket.send(JSON.stringify({
             type: "hit",
             targetId: id,
@@ -694,16 +758,34 @@ function loop() {
 
   ctx.restore();
 
-  // Death screen (5 sek)
+  // Death screen
   if (Date.now() - lastDeathTime < 5000) {
-    const t = (Date.now() - lastDeathTime) / 5000;
-    ctx.fillStyle = `rgba(0,0,0,${0.7})`;
+    ctx.fillStyle = `rgba(0,0,0,0.7)`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "white";
     ctx.font = "24px Arial";
     ctx.textAlign = "center";
     ctx.fillText("Respawning...", canvas.width / 2, canvas.height / 2);
   }
+
+  // Freeze/poison tint
+  if (player.frozenUntil > now) {
+    ctx.fillStyle = "rgba(0,150,255,0.25)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  if (player.poisonUntil > now) {
+    ctx.fillStyle = "rgba(0,255,0,0.2)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Ability cooldown HUD
+  const nowCD = Date.now();
+  const remaining = Math.max(0, player.abilityCooldown - nowCD);
+  const ratio = currentSkin.cooldown ? 1 - remaining / currentSkin.cooldown : 1;
+  abilityBtn.style.opacity = remaining > 0 ? "0.4" : "1";
+  abilityBtn.style.boxShadow = remaining > 0
+    ? "0 0 4px #555"
+    : "0 0 10px #0af";
 
   // Send update
   if (connected && myId && playerName) {
