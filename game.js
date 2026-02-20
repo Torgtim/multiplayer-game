@@ -3,6 +3,7 @@ const socket = new WebSocket("wss://multiplayer-server-production-40dc.up.railwa
 let roomCode = null;
 let connected = false;
 let myId = null;
+let worldSize = 1500;
 
 // UI
 const createBtn = document.getElementById("createBtn");
@@ -74,18 +75,32 @@ stayPortrait.onclick = () => {
 };
 
 // Player + world
-let player = { x: 0, y: 0, dir: 0, speed: 4, hp: 100, ammo: 30 };
+let player = {
+  x: 0,
+  y: 0,
+  dir: 0,
+  speed: 4,
+  hp: 100,
+  ammo: 30,
+  abilityCooldown: 0,
+  speedBoostUntil: 0,
+  damageBoostUntil: 0,
+  shield: 0
+};
 let coins = 0;
 let players = {};
 let pickups = {};
 let stats = {};
 let killfeed = [];
+let lastDeathTime = 0;
 
-// Skins
+// Skins + abilities
+// (abilityType brukes senere – nå bare struktur)
 let skins = [
   {
     name: "Default",
     price: 0,
+    abilityType: "dash", // kort dash fremover
     draw: (ctx, x, y) => {
       ctx.fillStyle = "cyan";
       ctx.fillRect(x, y, 40, 40);
@@ -94,6 +109,7 @@ let skins = [
   {
     name: "Neon",
     price: 50,
+    abilityType: "speed", // ekstra speed boost
     draw: (ctx, x, y) => {
       ctx.save();
       ctx.shadowColor = "#0ff";
@@ -106,6 +122,7 @@ let skins = [
   {
     name: "Lava",
     price: 100,
+    abilityType: "burst", // skyter 3 skudd
     draw: (ctx, x, y) => {
       let g = ctx.createLinearGradient(x, y, x+40, y+40);
       g.addColorStop(0, "#f00");
@@ -117,6 +134,7 @@ let skins = [
   {
     name: "Toxic",
     price: 120,
+    abilityType: "poison", // kunne vært DoT senere
     draw: (ctx, x, y) => {
       ctx.fillStyle = "#0f0";
       ctx.fillRect(x, y, 40, 40);
@@ -133,6 +151,7 @@ let skins = [
   {
     name: "Ice",
     price: 80,
+    abilityType: "freeze", // kunne bremse andre senere
     draw: (ctx, x, y) => {
       let g = ctx.createLinearGradient(x, y, x+40, y+40);
       g.addColorStop(0, "#aaf");
@@ -144,6 +163,7 @@ let skins = [
   {
     name: "Shadow",
     price: 150,
+    abilityType: "blink", // teleport kort distanse
     draw: (ctx, x, y) => {
       ctx.save();
       ctx.shadowColor = "#000";
@@ -226,7 +246,9 @@ joyArea.addEventListener("touchmove", e => {
   joy.style.top = (40 + dy) + "px";
   joyX = dx / max;
   joyY = dy / max;
-  player.dir = Math.atan2(dy, dx);
+  if (dx !== 0 || dy !== 0) {
+    player.dir = Math.atan2(dy, dx);
+  }
 });
 joyArea.addEventListener("touchend", () => {
   joy.style.left = "40px";
@@ -237,20 +259,70 @@ joyArea.addEventListener("touchend", () => {
 
 // Shoot
 let bullets = [];
-document.getElementById("shoot-btn").addEventListener("touchstart", () => {
-  if (!connected) return;
-  if (player.ammo <= 0) return;
-  player.ammo--;
-  bullets.push({
-    x: player.x,
-    y: player.y,
-    dx: Math.cos(player.dir) * 10,
-    dy: Math.sin(player.dir) * 10,
-    owner: myId
-  });
+const shootBtn = document.getElementById("shoot-btn");
+shootBtn.addEventListener("touchstart", () => {
+  fireBullet();
 });
 
-// World
+function fireBullet(multiplier = 1) {
+  if (!connected) return;
+  if (player.ammo <= 0) return;
+
+  const shots = Math.max(1, multiplier);
+  for (let i = 0; i < shots; i++) {
+    if (player.ammo <= 0) break;
+    player.ammo--;
+    const spread = (shots > 1) ? (i - (shots - 1) / 2) * 0.15 : 0;
+    const dir = player.dir + spread;
+    bullets.push({
+      x: player.x,
+      y: player.y,
+      dx: Math.cos(dir) * 12,
+      dy: Math.sin(dir) * 12,
+      owner: myId
+    });
+  }
+}
+
+// Ability button (egen knapp)
+const abilityBtn = document.createElement("button");
+abilityBtn.textContent = "ABILITY";
+abilityBtn.style.position = "fixed";
+abilityBtn.style.bottom = "150px";
+abilityBtn.style.right = "40px";
+abilityBtn.style.zIndex = "12";
+abilityBtn.style.padding = "6px 10px";
+abilityBtn.style.borderRadius = "8px";
+abilityBtn.style.border = "none";
+abilityBtn.style.background = "#0af";
+abilityBtn.style.color = "white";
+abilityBtn.style.fontSize = "12px";
+document.body.appendChild(abilityBtn);
+
+abilityBtn.addEventListener("touchstart", () => {
+  useAbility();
+});
+
+function useAbility() {
+  const now = Date.now();
+  if (player.abilityCooldown > now) return;
+
+  const type = currentSkin.abilityType;
+  if (type === "dash") {
+    player.x += Math.cos(player.dir) * 80;
+    player.y += Math.sin(player.dir) * 80;
+  } else if (type === "speed") {
+    player.speedBoostUntil = now + 4000;
+  } else if (type === "burst") {
+    fireBullet(3);
+  } else if (type === "blink") {
+    player.x += Math.cos(player.dir) * 150;
+    player.y += Math.sin(player.dir) * 150;
+  }
+  player.abilityCooldown = now + 6000; // 6 sek cooldown
+}
+
+// World walls + border
 let walls = [
   { x: -300, y: -200, w: 300, h: 80 },
   { x: 200, y: 150, w: 250, h: 120 },
@@ -270,6 +342,47 @@ menuToggle.onclick = () => {
   menu.style.display = show ? "block" : "none";
   shop.style.display = show ? "block" : "none";
 };
+
+// Draggable UI (menu, shop, scoreboard)
+[menu, shop, scoreboard].forEach(makeDraggable);
+
+function makeDraggable(el) {
+  let dragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  function start(e) {
+    dragging = true;
+    const rect = el.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    offsetX = clientX - rect.left;
+    offsetY = clientY - rect.top;
+    el.style.transform = "none";
+    el.style.left = rect.left + "px";
+    el.style.top = rect.top + "px";
+    el.style.position = "fixed";
+  }
+
+  function move(e) {
+    if (!dragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    el.style.left = (clientX - offsetX) + "px";
+    el.style.top = (clientY - offsetY) + "px";
+  }
+
+  function end() {
+    dragging = false;
+  }
+
+  el.addEventListener("mousedown", start);
+  el.addEventListener("touchstart", start);
+  window.addEventListener("mousemove", move);
+  window.addEventListener("touchmove", move);
+  window.addEventListener("mouseup", end);
+  window.addEventListener("touchend", end);
+}
 
 // Room buttons
 createBtn.onclick = () => {
@@ -302,6 +415,7 @@ socket.onmessage = msg => {
   if (data.type === "room_created") {
     roomCode = data.code;
     myId = data.id;
+    worldSize = data.worldSize || worldSize;
     roomDisplay.textContent = "Room: " + roomCode;
     roomHUD.textContent = "Room: " + roomCode;
     menu.style.display = "none";
@@ -312,6 +426,7 @@ socket.onmessage = msg => {
   if (data.type === "room_joined") {
     roomCode = data.code;
     myId = data.id;
+    worldSize = data.worldSize || worldSize;
     roomDisplay.textContent = "Joined: " + roomCode;
     roomHUD.textContent = "Room: " + roomCode;
     menu.style.display = "none";
@@ -324,15 +439,18 @@ socket.onmessage = msg => {
     pickups = data.pickups || {};
     stats = data.stats || {};
     if (players[myId]) {
+      // Ikke overskriv posisjon her – client har "authority"
       player.hp = players[myId].hp;
       player.ammo = players[myId].ammo;
-      player.x = players[myId].x;
-      player.y = players[myId].y;
     }
+    if (data.worldSize) worldSize = data.worldSize;
   }
 
   if (data.type === "killfeed") {
     killfeed.push(`${data.killer} eliminated ${data.victim}`);
+    if (data.victim === playerName) {
+      lastDeathTime = Date.now();
+    }
     setTimeout(() => {
       killfeed.shift();
     }, 5000);
@@ -382,16 +500,31 @@ function loop() {
   ctx.translate(canvas.width/2 - player.x, canvas.height/2 - player.y);
 
   // Bakgrunn
+  const half = worldSize / 2;
   ctx.fillStyle = "#222";
-  ctx.fillRect(-800, -800, 1600, 1600);
+  ctx.fillRect(-half, -half, worldSize, worldSize);
+
+  // World border
+  ctx.strokeStyle = "#00aaff";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(-half, -half, worldSize, worldSize);
 
   // Vegger
   ctx.fillStyle = "#555";
   walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
 
-  // Movement (smooth)
-  let targetX = player.x + joyX * player.speed;
-  let targetY = player.y + joyY * player.speed;
+  // Movement (smooth + speedboost + world clamp)
+  let speed = player.speed;
+  const now = Date.now();
+  if (player.speedBoostUntil > now) speed *= 1.6;
+
+  let targetX = player.x + joyX * speed;
+  let targetY = player.y + joyY * speed;
+
+  // clamp til world border
+  targetX = Math.max(-half + 20, Math.min(half - 20, targetX));
+  targetY = Math.max(-half + 20, Math.min(half - 20, targetY));
+
   let blocked = walls.some(w =>
     rectCollides(targetX - 20, targetY - 20, 40, 40, w.x, w.y, w.w, w.h)
   );
@@ -401,7 +534,7 @@ function loop() {
   }
 
   // HP + ammo HUD
-  hpHUD.textContent = "HP: " + Math.max(0, Math.floor(player.hp));
+  hpHUD.textContent = ""; // vi bruker bar i stedet
   ammoHUD.textContent = "AMMO: " + player.ammo;
   coinsHUD.textContent = "Coins: " + Math.floor(coins);
 
@@ -426,19 +559,32 @@ function loop() {
     const pl = players[id];
     const skin = skins.find(s => s.name === pl.skin) || skins[0];
     skin.draw(ctx, pl.x - 20, pl.y - 20);
+
+    // HP bar over andre spillere
+    const hpRatio = Math.max(0, Math.min(1, pl.hp / 100));
+    ctx.fillStyle = "black";
+    ctx.fillRect(pl.x - 22, pl.y - 32, 44, 6);
+    ctx.fillStyle = "#00aaff";
+    ctx.fillRect(pl.x - 22, pl.y - 32, 44 * hpRatio, 6);
+
     ctx.fillStyle = "white";
     ctx.font = "14px Arial";
     ctx.textAlign = "center";
-    ctx.fillText(pl.name || "Player", pl.x, pl.y - 30);
+    ctx.fillText(pl.name || "Player", pl.x, pl.y - 40);
   }
 
   // Hvis vi ikke har sync på oss selv ennå
   if (!players[myId]) {
     currentSkin.draw(ctx, player.x - 20, player.y - 20);
+    const hpRatio = Math.max(0, Math.min(1, player.hp / 100));
+    ctx.fillStyle = "black";
+    ctx.fillRect(player.x - 22, player.y - 32, 44, 6);
+    ctx.fillStyle = "#00aaff";
+    ctx.fillRect(player.x - 22, player.y - 32, 44 * hpRatio, 6);
     ctx.fillStyle = "white";
     ctx.font = "14px Arial";
     ctx.textAlign = "center";
-    ctx.fillText(playerName || "Player", player.x, player.y - 30);
+    ctx.fillText(playerName || "Player", player.x, player.y - 40);
   }
 
   // Bullets
@@ -448,6 +594,15 @@ function loop() {
     b.y += b.dy;
     ctx.fillRect(b.x - 5, b.y - 5, 10, 10);
 
+    // stopp i vegger
+    let hitWall = walls.some(w =>
+      rectCollides(b.x - 5, b.y - 5, 10, 10, w.x, w.y, w.w, w.h)
+    );
+    if (hitWall) {
+      bullets.splice(i, 1);
+      return;
+    }
+
     // Treff andre spillere
     for (let id in players) {
       if (id === myId) continue;
@@ -455,11 +610,13 @@ function loop() {
       if (rectCollides(b.x - 5, b.y - 5, 10, 10, pl.x - 20, pl.y - 20, 40, 40)) {
         bullets.splice(i, 1);
         if (connected) {
+          let dmg = 20;
+          if (player.damageBoostUntil > now) dmg = 40;
           coins += 10;
           socket.send(JSON.stringify({
             type: "hit",
             targetId: id,
-            damage: 20
+            damage: dmg
           }));
         }
         break;
@@ -468,6 +625,17 @@ function loop() {
   });
 
   ctx.restore();
+
+  // Death screen (5 sek)
+  if (Date.now() - lastDeathTime < 5000) {
+    const t = (Date.now() - lastDeathTime) / 5000;
+    ctx.fillStyle = `rgba(0,0,0,${0.7})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "white";
+    ctx.font = "24px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("Respawning...", canvas.width / 2, canvas.height / 2);
+  }
 
   // Send update
   if (connected && myId && playerName) {
@@ -479,7 +647,8 @@ function loop() {
       skin: currentSkin.name,
       name: playerName,
       hp: player.hp,
-      ammo: player.ammo
+      ammo: player.ammo,
+      abilityCooldown: player.abilityCooldown
     }));
   }
 
