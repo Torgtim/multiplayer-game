@@ -11,6 +11,46 @@ body {
     background: #333;
 }
 
+/* Menu */
+#menu {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.7);
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    text-align: center;
+    z-index: 10;
+}
+
+#menu input {
+    width: 120px;
+    padding: 5px;
+    margin-top: 10px;
+}
+
+/* Shop */
+#shop {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.7);
+    padding: 15px;
+    border-radius: 10px;
+    color: white;
+    width: 150px;
+    font-size: 12px;
+    z-index: 9;
+}
+
+#skinPreview {
+    width: 40px;
+    height: 40px;
+    margin: 5px auto;
+}
+
 /* Joystick */
 #joystick-area {
     position: fixed;
@@ -21,6 +61,7 @@ body {
     background: rgba(255,255,255,0.1);
     border-radius: 50%;
     touch-action: none;
+    z-index: 5;
 }
 
 #joystick {
@@ -48,4 +89,5 @@ body {
     color: white;
     font-weight: bold;
     touch-action: none;
+    z-index: 5;
 }
