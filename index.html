@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Torgrim Multiplayer V4</title>
+  <title>Torgrim Multiplayer V5</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -45,11 +45,29 @@
   </div>
 </div>
 
+<div id="portraitOverlay">
+  <div id="portraitBox">
+    <p>Rotate your device for best experience</p>
+    <button id="stayPortrait">Stay in portrait (temporary)</button>
+  </div>
+</div>
+
 <div id="joystick-area">
   <div id="joystick"></div>
 </div>
 
 <div id="shoot-btn">SHOOT</div>
+
+<div id="ammoHUD">AMMO: 30</div>
+
+<button id="scoreBtn">SCORE</button>
+
+<div id="scoreboard">
+  <h3>Scoreboard</h3>
+  <table id="scoreTable"></table>
+</div>
+
+<div id="killfeed"></div>
 
 <script src="game.js"></script>
 </body>
