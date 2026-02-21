@@ -147,7 +147,7 @@ let skins = [
     name: "Toxic",
     price: 400,
     abilityType: "poison",
-    abilityPower: 4, // 4 dmg per tick
+    abilityPower: 5,
     cooldown: 8000,
     draw: (ctx, x, y) => {
       ctx.fillStyle = "#0f0";
@@ -418,7 +418,7 @@ function useAbility() {
       socket.send(JSON.stringify({
         type: "poison",
         targetId: closest,
-        damage: power
+        damage: currentSkin.abilityPower
       }));
     }
   }
@@ -518,8 +518,6 @@ scoreBtn.onclick = () => {
   }
 };
 
-// === DEL 1 SLUTT ===
-
 // Socket
 socket.onmessage = msg => {
   const data = JSON.parse(msg.data);
@@ -553,6 +551,8 @@ socket.onmessage = msg => {
     if (players[myId]) {
       player.hp = players[myId].hp;
       player.ammo = players[myId].ammo;
+      player.x = players[myId].x;
+      player.y = players[myId].y;
     }
     if (data.worldSize) worldSize = data.worldSize;
   }
@@ -662,7 +662,6 @@ function loop() {
     rectCollides(desiredX - 20, desiredY - 20, 40, 40, w.x, w.y, w.w, w.h)
   );
 
-  // Freeze stopper movement
   if (player.frozenUntil > now) {
     desiredX = player.x;
     desiredY = player.y;
@@ -805,7 +804,7 @@ function loop() {
     ? "0 0 4px #555"
     : "0 0 10px #0af";
 
-  // Send update
+  // Send update (uten hp/ammo)
   if (connected && myId && playerName) {
     socket.send(JSON.stringify({
       type: "update",
@@ -814,8 +813,6 @@ function loop() {
       dir: player.dir,
       skin: currentSkin.name,
       name: playerName,
-      hp: player.hp,
-      ammo: player.ammo,
       abilityCooldown: player.abilityCooldown
     }));
   }
