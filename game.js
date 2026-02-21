@@ -89,7 +89,9 @@ let player = {
   shield: 0,
   frozenUntil: 0,
   poisonUntil: 0,
-  poisonDamage: 0
+  poisonDamage: 0,
+  poisonTickEvery: 300,
+  nextPoisonTick: null
 };
 
 let coins = Number(localStorage.getItem("coins")) || 0;
@@ -145,7 +147,7 @@ let skins = [
     name: "Toxic",
     price: 400,
     abilityType: "poison",
-    abilityPower: 5,
+    abilityPower: 4, // 4 dmg per tick
     cooldown: 8000,
     draw: (ctx, x, y) => {
       ctx.fillStyle = "#0f0";
@@ -353,7 +355,6 @@ function useAbility() {
   }
 
   if (type === "speed") {
-    const now = Date.now();
     player.speedBoostUntil = now + 3000;
     player.speedBoostMultiplier = power;
   }
@@ -401,15 +402,18 @@ function useAbility() {
     }
   }
 
-  if (data.type === "poison") {
-  if (data.targetId === myId) {
-    const now = Date.now();
-    player.poisonUntil = now + 3000;      // total varighet
-    player.poisonDamage = 4;              // 4 damage per tick
-    player.poisonTickEvery = 300;         // 300 ms mellom hver tick
-    player.nextPoisonTick = now + 300;    // første tick om 300 ms
-  }
-}
+  if (type === "poison") {
+    let closest = null;
+    let dist = 99999;
+    for (let id in players) {
+      if (id === myId) continue;
+      const pl = players[id];
+      const d = Math.hypot(pl.x - player.x, pl.y - player.y);
+      if (d < dist) {
+        dist = d;
+        closest = id;
+      }
+    }
     if (closest) {
       socket.send(JSON.stringify({
         type: "poison",
@@ -508,6 +512,8 @@ scoreBtn.onclick = () => {
   }
 };
 
+// === DEL 1 SLUTT ===
+
 // Socket
 socket.onmessage = msg => {
   const data = JSON.parse(msg.data);
@@ -582,8 +588,11 @@ socket.onmessage = msg => {
 
   if (data.type === "poison_effect") {
     if (data.targetId === myId) {
-      player.poisonUntil = Date.now() + 3000;
-      player.poisonDamage = data.damage;
+      const now = Date.now();
+      player.poisonUntil = now + 3000;
+      player.poisonDamage = 4;
+      player.poisonTickEvery = 300;
+      player.nextPoisonTick = now + 300;
     }
   }
 };
@@ -619,7 +628,7 @@ function loop() {
   ctx.fillRect(-half, -half, worldSize, worldSize);
 
   // Pulsende neon‑border
-  const pulse = (Math.sin(Date.now() / 400) + 1) / 2; // 0–1
+  const pulse = (Math.sin(Date.now() / 400) + 1) / 2;
   ctx.strokeStyle = `rgba(0,200,255,${0.6 + pulse * 0.4})`;
   ctx.lineWidth = 6;
   ctx.shadowColor = "#00c8ff";
@@ -631,7 +640,7 @@ function loop() {
   ctx.fillStyle = "#555";
   walls.forEach(w => ctx.fillRect(w.x, w.y, w.w, w.h));
 
-  // Ultra smooth movement
+  // Smooth movement
   let speed = player.speed;
   if (player.speedBoostUntil > now) {
     speed *= player.speedBoostMultiplier || 1.6;
@@ -647,6 +656,7 @@ function loop() {
     rectCollides(desiredX - 20, desiredY - 20, 40, 40, w.x, w.y, w.w, w.h)
   );
 
+  // Freeze stopper movement
   if (player.frozenUntil > now) {
     desiredX = player.x;
     desiredY = player.y;
@@ -659,15 +669,18 @@ function loop() {
     player.y = lerp(player.y, desiredY, 0.15);
   }
 
-  if (data.type === "poison_effect") {
-  if (data.targetId === myId) {
-    const now = Date.now();
-    player.poisonUntil = now + 3000;      // total varighet
-    player.poisonDamage = 4;              // 4 damage per tick
-    player.poisonTickEvery = 300;         // 300 ms mellom hver tick
-    player.nextPoisonTick = now + 300;    // første tick om 300 ms
+  // Poison – 4 dmg × 10 ticks
+  if (player.poisonUntil > now) {
+    if (!player.nextPoisonTick) {
+      player.nextPoisonTick = now + (player.poisonTickEvery || 300);
+    }
+    while (now >= player.nextPoisonTick && now <= player.poisonUntil) {
+      player.hp -= player.poisonDamage || 4;
+      player.nextPoisonTick += player.poisonTickEvery || 300;
+    }
+  } else {
+    player.nextPoisonTick = null;
   }
-}
 
   // HUD
   hpHUD.textContent = "";
@@ -781,7 +794,6 @@ function loop() {
   // Ability cooldown HUD
   const nowCD = Date.now();
   const remaining = Math.max(0, player.abilityCooldown - nowCD);
-  const ratio = currentSkin.cooldown ? 1 - remaining / currentSkin.cooldown : 1;
   abilityBtn.style.opacity = remaining > 0 ? "0.4" : "1";
   abilityBtn.style.boxShadow = remaining > 0
     ? "0 0 4px #555"
