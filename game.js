@@ -662,12 +662,15 @@ function loop() {
     player.y = lerp(player.y, desiredY, 0.15);
   }
 
-  // Poison
-  if (player.poisonUntil > now) {
-    if (Math.random() < 0.05) {
-      player.hp -= player.poisonDamage;
-    }
+  if (data.type === "poison_effect") {
+  if (data.targetId === myId) {
+    const now = Date.now();
+    player.poisonUntil = now + 3000;      // total varighet
+    player.poisonDamage = 4;              // 4 damage per tick
+    player.poisonTickEvery = 300;         // 300 ms mellom hver tick
+    player.nextPoisonTick = now + 300;    // første tick om 300 ms
   }
+}
 
   // HUD
   hpHUD.textContent = "";
